@@ -1,0 +1,30 @@
+# Backend
+backend/TodoApi/bin/
+backend/TodoApi/obj/
+backend/TodoApi/*.db
+backend/TodoApi/*.db-journal
+
+# Frontend
+frontend/todo-app/node_modules/
+frontend/todo-app/dist/
+frontend/todo-app/.env
+frontend/todo-app/.env.local
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

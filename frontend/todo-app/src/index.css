@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Outfit', system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  color: #f1f5f9;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e293b;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Focus styles */
+*:focus-visible {
+  outline: 2px solid #32a4ff;
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background: rgba(50, 164, 255, 0.3);
+}
+
+/* Transitions */
+@layer utilities {
+  .transition-default {
+    @apply transition-all duration-200 ease-out;
+  }
+}
+
+/* Glass effect */
+@layer components {
+  .glass {
+    @apply bg-surface-800/60 backdrop-blur-xl border border-surface-700/50;
+  }
+  
+  .glass-light {
+    @apply bg-surface-700/40 backdrop-blur-lg border border-surface-600/30;
+  }
+}
+
+/* Input styles */
+input, textarea, select {
+  @apply bg-surface-800 border border-surface-600 rounded-lg px-4 py-2.5 text-surface-100 placeholder:text-surface-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500/50 transition-default;
+}
+
+/* Button base */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-default disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-primary {
+    @apply btn bg-primary-600 text-white hover:bg-primary-500 active:bg-primary-700 shadow-lg hover:shadow-glow;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-surface-700 text-surface-100 hover:bg-surface-600 border border-surface-600;
+  }
+  
+  .btn-ghost {
+    @apply btn text-surface-400 hover:text-surface-100 hover:bg-surface-700/50;
+  }
+  
+  .btn-danger {
+    @apply btn bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-600/30;
+  }
+}
