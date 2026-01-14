@@ -90,3 +90,15 @@ public class TaskFilterParams
     public string? SortBy { get; set; } = "createdAt";
     public bool SortDescending { get; set; } = true;
 }
+
+/// <summary>
+/// Response DTO for task statistics
+/// </summary>
+public class TaskStatsResponse
+{
+    public int Total { get; set; }
+    public int Todo { get; set; }
+    public int InProgress { get; set; }
+    public int Done { get; set; }
+    public int Overdue { get; set; }
+}

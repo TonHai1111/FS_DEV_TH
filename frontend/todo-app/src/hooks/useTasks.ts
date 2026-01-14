@@ -1,166 +1,208 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Task, Category, TaskFilterParams, TaskStats, TaskStatus } from '../types';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Task, TaskFilterParams, TaskStatus } from '../types';
 import { tasksApi, categoriesApi } from '../services/api';
 import toast from 'react-hot-toast';
 
+// Query keys for caching
+export const queryKeys = {
+  tasks: (filters?: TaskFilterParams) => ['tasks', filters] as const,
+  categories: ['categories'] as const,
+  stats: ['taskStats'] as const,
+};
+
 export function useTasks() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [stats, setStats] = useState<TaskStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [filters, setFilters] = useState<TaskFilterParams>({});
-  
-  const fetchTasks = useCallback(async () => {
-    try {
-      const data = await tasksApi.getAll(filters);
-      setTasks(data);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch tasks';
-      toast.error(message);
-    }
-  }, [filters]);
-  
-  const fetchCategories = useCallback(async () => {
-    try {
-      const data = await categoriesApi.getAll();
-      setCategories(data);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch categories';
-      toast.error(message);
-    }
-  }, []);
-  
-  const fetchStats = useCallback(async () => {
-    try {
-      const data = await tasksApi.getStats();
-      setStats(data);
-    } catch (error) {
-      console.error('Failed to fetch stats:', error);
-    }
-  }, []);
-  
-  const refreshAll = useCallback(async () => {
-    setIsLoading(true);
-    await Promise.all([fetchTasks(), fetchCategories(), fetchStats()]);
-    setIsLoading(false);
-  }, [fetchTasks, fetchCategories, fetchStats]);
-  
-  useEffect(() => {
-    refreshAll();
-  }, [refreshAll]);
-  
-  const createTask = async (data: Parameters<typeof tasksApi.create>[0]) => {
-    try {
-      const newTask = await tasksApi.create(data);
-      setTasks((prev) => [newTask, ...prev]);
-      await fetchStats();
+
+  // Fetch tasks with React Query
+  const {
+    data: tasks = [],
+    isLoading: isLoadingTasks,
+    error: tasksError,
+  } = useQuery({
+    queryKey: queryKeys.tasks(filters),
+    queryFn: () => tasksApi.getAll(filters),
+  });
+
+  // Fetch categories with React Query
+  const {
+    data: categories = [],
+    isLoading: isLoadingCategories,
+  } = useQuery({
+    queryKey: queryKeys.categories,
+    queryFn: categoriesApi.getAll,
+  });
+
+  // Fetch stats with React Query
+  const {
+    data: stats = null,
+  } = useQuery({
+    queryKey: queryKeys.stats,
+    queryFn: tasksApi.getStats,
+  });
+
+  // Combined loading state
+  const isLoading = isLoadingTasks || isLoadingCategories;
+
+  // Create task mutation
+  const createTaskMutation = useMutation({
+    mutationFn: tasksApi.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
       toast.success('Task created successfully');
-      return newTask;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create task';
-      toast.error(message);
-      throw error;
-    }
-  };
-  
-  const updateTask = async (id: number, data: Parameters<typeof tasksApi.update>[1]) => {
-    try {
-      const updatedTask = await tasksApi.update(id, data);
-      setTasks((prev) => prev.map((t) => (t.id === id ? updatedTask : t)));
-      await fetchStats();
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to create task');
+    },
+  });
+
+  // Update task mutation
+  const updateTaskMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Parameters<typeof tasksApi.update>[1] }) =>
+      tasksApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
       toast.success('Task updated successfully');
-      return updatedTask;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update task';
-      toast.error(message);
-      throw error;
-    }
-  };
-  
-  const updateTaskStatus = async (id: number, status: TaskStatus) => {
-    // Optimistic update
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, status } : t))
-    );
-    
-    try {
-      const updatedTask = await tasksApi.updateStatus(id, status);
-      setTasks((prev) => prev.map((t) => (t.id === id ? updatedTask : t)));
-      await fetchStats();
-    } catch (error) {
-      // Revert on error
-      await fetchTasks();
-      const message = error instanceof Error ? error.message : 'Failed to update status';
-      toast.error(message);
-      throw error;
-    }
-  };
-  
-  const deleteTask = async (id: number) => {
-    try {
-      await tasksApi.delete(id);
-      setTasks((prev) => prev.filter((t) => t.id !== id));
-      await fetchStats();
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to update task');
+    },
+  });
+
+  // Update task status mutation (optimistic update)
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: TaskStatus }) =>
+      tasksApi.updateStatus(id, status),
+    onMutate: async ({ id, status }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['tasks'] });
+
+      // Snapshot current tasks
+      const previousTasks = queryClient.getQueryData<Task[]>(queryKeys.tasks(filters));
+
+      // Optimistically update
+      queryClient.setQueryData<Task[]>(queryKeys.tasks(filters), (old) =>
+        old?.map((task) => (task.id === id ? { ...task, status } : task)) ?? []
+      );
+
+      return { previousTasks };
+    },
+    onError: (error: Error, _variables, context) => {
+      // Rollback on error
+      if (context?.previousTasks) {
+        queryClient.setQueryData(queryKeys.tasks(filters), context.previousTasks);
+      }
+      toast.error(error.message || 'Failed to update status');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+    },
+  });
+
+  // Delete task mutation
+  const deleteTaskMutation = useMutation({
+    mutationFn: tasksApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
       toast.success('Task deleted successfully');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete task';
-      toast.error(message);
-      throw error;
-    }
-  };
-  
-  const createCategory = async (data: Parameters<typeof categoriesApi.create>[0]) => {
-    try {
-      const newCategory = await categoriesApi.create(data);
-      setCategories((prev) => [...prev, newCategory]);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to delete task');
+    },
+  });
+
+  // Create category mutation
+  const createCategoryMutation = useMutation({
+    mutationFn: categoriesApi.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
       toast.success('Category created successfully');
-      return newCategory;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create category';
-      toast.error(message);
-      throw error;
-    }
-  };
-  
-  const updateCategory = async (id: number, data: Parameters<typeof categoriesApi.update>[1]) => {
-    try {
-      const updatedCategory = await categoriesApi.update(id, data);
-      setCategories((prev) => prev.map((c) => (c.id === id ? updatedCategory : c)));
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to create category');
+    },
+  });
+
+  // Update category mutation
+  const updateCategoryMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Parameters<typeof categoriesApi.update>[1] }) =>
+      categoriesApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
       toast.success('Category updated successfully');
-      return updatedCategory;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update category';
-      toast.error(message);
-      throw error;
-    }
-  };
-  
-  const deleteCategory = async (id: number) => {
-    try {
-      await categoriesApi.delete(id);
-      setCategories((prev) => prev.filter((c) => c.id !== id));
-      await fetchTasks(); // Refresh tasks as some may have lost their category
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to update category');
+    },
+  });
+
+  // Delete category mutation
+  const deleteCategoryMutation = useMutation({
+    mutationFn: categoriesApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] }); // Tasks may have lost category
       toast.success('Category deleted successfully');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete category';
-      toast.error(message);
-      throw error;
-    }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to delete category');
+    },
+  });
+
+  // Helper functions that match the old API
+  const createTask = async (data: Parameters<typeof tasksApi.create>[0]) => {
+    return createTaskMutation.mutateAsync(data);
   };
-  
+
+  const updateTask = async (id: number, data: Parameters<typeof tasksApi.update>[1]) => {
+    return updateTaskMutation.mutateAsync({ id, data });
+  };
+
+  const updateTaskStatus = async (id: number, status: TaskStatus) => {
+    return updateStatusMutation.mutateAsync({ id, status });
+  };
+
+  const deleteTask = async (id: number) => {
+    return deleteTaskMutation.mutateAsync(id);
+  };
+
+  const createCategory = async (data: Parameters<typeof categoriesApi.create>[0]) => {
+    return createCategoryMutation.mutateAsync(data);
+  };
+
+  const updateCategory = async (id: number, data: Parameters<typeof categoriesApi.update>[1]) => {
+    return updateCategoryMutation.mutateAsync({ id, data });
+  };
+
+  const deleteCategory = async (id: number) => {
+    return deleteCategoryMutation.mutateAsync(id);
+  };
+
+  const refreshAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+    queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+  };
+
   // Group tasks by status
   const tasksByStatus = {
     [TaskStatus.Todo]: tasks.filter((t) => t.status === TaskStatus.Todo),
     [TaskStatus.InProgress]: tasks.filter((t) => t.status === TaskStatus.InProgress),
     [TaskStatus.Done]: tasks.filter((t) => t.status === TaskStatus.Done),
   };
-  
+
   return {
     tasks,
     tasksByStatus,
     categories,
     stats,
     isLoading,
+    error: tasksError,
     filters,
     setFilters,
     createTask,
