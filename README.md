@@ -58,10 +58,12 @@ A full-stack task management application built with .NET Core 8 and React TypeSc
 - **TypeScript** - Type safety
 - **Vite** - Fast build tool
 - **Tailwind CSS** - Utility-first styling
+- **React Query** (`@tanstack/react-query`) - Server state management with caching
 - **React Router v6** - Client-side routing
 - **Axios** - HTTP client with interceptors
 - **dnd-kit** - Accessible drag-and-drop
 - **React Hook Form + Zod** - Form handling and validation
+- **date-fns** - Date manipulation utilities
 - **Lucide React** - Icon library
 - **React Hot Toast** - Notifications
 
@@ -109,36 +111,73 @@ A full-stack task management application built with .NET Core 8 and React TypeSc
 ```
 FS_DEV_TH/
 ├── backend/
-│   └── TodoApi/
-│       ├── Controllers/          # API endpoints
-│       │   ├── AuthController.cs
-│       │   ├── TasksController.cs
-│       │   └── CategoriesController.cs
-│       ├── Data/
-│       │   └── AppDbContext.cs   # EF Core context
-│       ├── Middleware/
-│       │   └── ExceptionMiddleware.cs
-│       ├── Models/
-│       │   ├── User.cs
-│       │   ├── TodoTask.cs
-│       │   ├── Category.cs
-│       │   └── DTOs/             # Data transfer objects
+│   ├── TodoApi/
+│   │   ├── Controllers/          # API endpoints
+│   │   │   ├── AuthController.cs
+│   │   │   ├── TasksController.cs
+│   │   │   └── CategoriesController.cs
+│   │   ├── Data/
+│   │   │   └── AppDbContext.cs   # EF Core context
+│   │   ├── Middleware/
+│   │   │   └── ExceptionMiddleware.cs
+│   │   ├── Migrations/           # EF Core migrations
+│   │   ├── Models/
+│   │   │   ├── User.cs
+│   │   │   ├── TodoTask.cs
+│   │   │   ├── Category.cs
+│   │   │   └── DTOs/             # Data transfer objects
+│   │   │       ├── ApiResponse.cs
+│   │   │       ├── AuthDTOs.cs
+│   │   │       ├── CategoryDTOs.cs
+│   │   │       └── TaskDTOs.cs
+│   │   ├── Services/             # Business logic layer
+│   │   │   ├── IAuthService.cs
+│   │   │   ├── AuthService.cs
+│   │   │   ├── ITokenService.cs
+│   │   │   ├── TokenService.cs
+│   │   │   ├── ITaskService.cs
+│   │   │   ├── TaskService.cs
+│   │   │   ├── ICategoryService.cs
+│   │   │   └── CategoryService.cs
+│   │   ├── Program.cs            # App configuration
+│   │   ├── appsettings.json
+│   │   └── TodoApi.csproj
+│   │
+│   └── TodoApi.Tests/            # Unit tests (xUnit + Moq)
+│       ├── Controllers/
+│       │   ├── AuthControllerTests.cs
+│       │   ├── TasksControllerTests.cs
+│       │   └── CategoriesControllerTests.cs
 │       ├── Services/
-│       │   ├── AuthService.cs
-│       │   └── TokenService.cs
-│       ├── Program.cs            # App configuration
-│       ├── appsettings.json
-│       └── TodoApi.csproj
+│       │   ├── AuthServiceTests.cs
+│       │   ├── TaskServiceTests.cs
+│       │   ├── CategoryServiceTests.cs
+│       │   └── TokenServiceTests.cs
+│       └── TodoApi.Tests.csproj
 │
 ├── frontend/
 │   └── todo-app/
 │       ├── src/
 │       │   ├── components/       # React components
+│       │   │   ├── Header.tsx
+│       │   │   ├── LoadingSpinner.tsx
+│       │   │   ├── Sidebar.tsx
+│       │   │   ├── TaskBoard.tsx
+│       │   │   ├── TaskCard.tsx
+│       │   │   ├── TaskColumn.tsx
+│       │   │   └── TaskModal.tsx
 │       │   ├── context/          # Auth context
+│       │   │   └── AuthContext.tsx
 │       │   ├── hooks/            # Custom hooks
+│       │   │   └── useTasks.ts   # React Query hooks
 │       │   ├── pages/            # Page components
+│       │   │   ├── Dashboard.tsx
+│       │   │   ├── LoginPage.tsx
+│       │   │   └── RegisterPage.tsx
 │       │   ├── services/         # API services
+│       │   │   └── api.ts
 │       │   └── types/            # TypeScript types
+│       │       └── index.ts
 │       ├── package.json
 │       └── vite.config.ts
 │
@@ -171,6 +210,48 @@ dotnet watch run
 
 The API will be available at `http://localhost:5000` with Swagger at `/swagger`.
 
+#### Testing the API
+
+You can test the API using Swagger UI or cURL:
+
+**1. Register a test account:**
+```bash
+curl -X POST http://localhost:5000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "testuser",
+    "email": "test@example.com",
+    "password": "Password123!"
+  }'
+```
+
+**2. Login to get JWT token:**
+```bash
+curl -X POST http://localhost:5000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "password": "Password123!"
+  }'
+```
+
+Response will include `accessToken` and `refreshToken`. Use the `accessToken` for authenticated requests.
+
+**3. Create a task (with authorization):**
+```bash
+curl -X POST http://localhost:5000/api/tasks \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -d '{
+    "title": "My first task",
+    "description": "This is a test task",
+    "priority": 1,
+    "dueDate": "2024-12-31T23:59:59Z"
+  }'
+```
+
+Priority values: `0` = Low, `1` = Medium, `2` = High
+
 ### Frontend Setup
 
 ```bash
@@ -186,6 +267,37 @@ npm run dev
 # Build for production
 npm run build
 ```
+
+#### Using the Application
+
+**1. Register a new account:**
+- Open http://localhost:5173 in your browser
+- Click "Register" or navigate to `/register`
+- Fill in username, email, and password
+- Click "Create Account"
+- You'll be automatically logged in and redirected to the dashboard
+
+**2. Login with existing account:**
+- Navigate to http://localhost:5173/login
+- Enter your email and password
+- Click "Sign In"
+
+**3. Create a new task:**
+- Once logged in, click the "+ Add Task" button in any column (Todo, In Progress, Done)
+- Fill in the task details:
+  - **Title** (required): Name of your task
+  - **Description** (optional): Additional details
+  - **Priority**: Low, Medium, or High
+  - **Due Date** (optional): When the task is due
+  - **Category** (optional): Select from your categories
+- Click "Create Task"
+
+**4. Manage tasks:**
+- **Drag and drop** tasks between columns to change status
+- **Click** on a task to view/edit details
+- **Delete** tasks using the delete button on the task card
+- **Filter** tasks by category using the sidebar
+- **Search** tasks using the search bar
 
 ### Configuration
 
@@ -358,8 +470,11 @@ Category
 
 ### Running Tests (Backend)
 ```bash
-cd backend/TodoApi
+cd backend/TodoApi.Tests
 dotnet test
+
+# Run a specific test
+dotnet test --filter "FullyQualifiedName~TaskServiceTests.GetTasksAsync_ReturnsUserTasks"
 ```
 
 ### Database Migrations
