@@ -3,6 +3,8 @@ backend/TodoApi/bin/
 backend/TodoApi/obj/
 backend/TodoApi/*.db
 backend/TodoApi/*.db-journal
+backend/TodoApi/*.db-shm
+backend/TodoApi/*.db-wal
 backend/TodoApi.Tests/bin/
 backend/TodoApi.Tests/obj/
 
