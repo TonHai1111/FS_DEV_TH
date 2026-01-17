@@ -3,6 +3,8 @@ backend/TodoApi/bin/
 backend/TodoApi/obj/
 backend/TodoApi/*.db
 backend/TodoApi/*.db-journal
+backend/TodoApi.Tests/bin/
+backend/TodoApi.Tests/obj/
 
 # Frontend
 frontend/todo-app/node_modules/
