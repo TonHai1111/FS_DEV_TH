@@ -48,7 +48,9 @@ public class CategoryService : ICategoryService
             .Include(c => c.Tasks)
             .FirstOrDefaultAsync(c => c.Id == categoryId && c.UserId == userId);
 
-        return category == null ? null : ToCategoryResponse(category);
+        if (category is null) return null;
+
+        return ToCategoryResponse(category);
     }
 
     /// <inheritdoc />

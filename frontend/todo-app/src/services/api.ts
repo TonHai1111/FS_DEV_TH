@@ -204,6 +204,12 @@ const unwrapResponseOrEmpty = <T>(response: { data: ApiResponse<T> }, errorMessa
   return response.data.data ?? defaultValue;
 };
 
+const unwrapVoidResponse = (response: { data: ApiResponse<null> }, errorMessage: string): void => {
+  if (!response.data.success) {
+    throw new Error(response.data.message || errorMessage);
+  }
+};
+
 // Auth API
 export const authApi = {
   login: async (data: LoginRequest): Promise<AuthResponse> => {
@@ -259,9 +265,7 @@ export const tasksApi = {
 
   delete: async (id: number): Promise<void> => {
     const response = await api.delete<ApiResponse<null>>(`/tasks/${id}`);
-    if (!response.data.success) {
-      throw new Error(response.data.message || 'Failed to delete task');
-    }
+    unwrapVoidResponse(response, 'Failed to delete task');
   },
 
   getStats: async (): Promise<TaskStats> => {
@@ -294,9 +298,7 @@ export const categoriesApi = {
 
   delete: async (id: number): Promise<void> => {
     const response = await api.delete<ApiResponse<null>>(`/categories/${id}`);
-    if (!response.data.success) {
-      throw new Error(response.data.message || 'Failed to delete category');
-    }
+    unwrapVoidResponse(response, 'Failed to delete category');
   },
 };
 

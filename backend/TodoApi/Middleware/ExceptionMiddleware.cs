@@ -62,19 +62,19 @@ public class ExceptionMiddleware
 
     private static (HttpStatusCode statusCode, string message) HandleDbUpdateException(DbUpdateException exception)
     {
-        var message = exception.InnerException?.Message ?? exception.Message;
+        var errorMessage = exception.InnerException?.Message ?? exception.Message;
+        var lowerMessage = errorMessage.ToLowerInvariant();
 
-        return message switch
+        if (lowerMessage.Contains("unique") || lowerMessage.Contains("duplicate"))
         {
-            var m when m.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
-                    || m.Contains("duplicate", StringComparison.OrdinalIgnoreCase)
-                => (HttpStatusCode.Conflict, "A record with the same unique value already exists."),
+            return (HttpStatusCode.Conflict, "A record with the same unique value already exists.");
+        }
 
-            var m when m.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase)
-                    || m.Contains("reference", StringComparison.OrdinalIgnoreCase)
-                => (HttpStatusCode.BadRequest, "The operation failed due to a data relationship constraint."),
+        if (lowerMessage.Contains("foreign key") || lowerMessage.Contains("reference"))
+        {
+            return (HttpStatusCode.BadRequest, "The operation failed due to a data relationship constraint.");
+        }
 
-            _ => (HttpStatusCode.BadRequest, "Failed to save changes to the database.")
-        };
+        return (HttpStatusCode.BadRequest, "Failed to save changes to the database.");
     }
 }

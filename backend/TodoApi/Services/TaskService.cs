@@ -124,7 +124,9 @@ public class TaskService : ITaskService
             .Include(t => t.Category)
             .FirstOrDefaultAsync(t => t.Id == taskId && t.UserId == userId);
 
-        return task == null ? null : MapToTaskResponse(task);
+        if (task is null) return null;
+
+        return MapToTaskResponse(task);
     }
 
     /// <inheritdoc />
@@ -146,10 +148,7 @@ public class TaskService : ITaskService
         _context.Tasks.Add(task);
         await _context.SaveChangesAsync();
 
-        // Reload with category
-        await _context.Entry(task).Reference(t => t.Category).LoadAsync();
-
-        return MapToTaskResponse(task);
+        return await ReloadAndMapTask(task);
     }
 
     /// <inheritdoc />
@@ -158,10 +157,7 @@ public class TaskService : ITaskService
         var task = await _context.Tasks
             .FirstOrDefaultAsync(t => t.Id == taskId && t.UserId == userId);
 
-        if (task == null)
-        {
-            return null;
-        }
+        if (task is null) return null;
 
         task.Title = request.Title;
         task.Description = request.Description;
@@ -172,9 +168,15 @@ public class TaskService : ITaskService
 
         await _context.SaveChangesAsync();
 
-        // Reload with category
-        await _context.Entry(task).Reference(t => t.Category).LoadAsync();
+        return await ReloadAndMapTask(task);
+    }
 
+    /// <summary>
+    /// Reloads category reference and maps task to response DTO
+    /// </summary>
+    private async Task<TaskResponse> ReloadAndMapTask(TodoTask task)
+    {
+        await _context.Entry(task).Reference(t => t.Category).LoadAsync();
         return MapToTaskResponse(task);
     }
 

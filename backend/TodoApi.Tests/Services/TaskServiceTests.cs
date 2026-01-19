@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 using TodoApi.Data;
 using TodoApi.Models;
@@ -541,32 +542,67 @@ public class TaskServiceTests
     }
 
     [Fact]
-    public void TaskFilterParams_PageSize_ClampedToMaximum()
+    public void TaskFilterParams_PageSize_ValidationFailsWhenExceedsMaximum()
     {
-        // Arrange & Act
+        // Arrange
         var filters = new TaskFilterParams { PageSize = 500 };
+        var validationContext = new ValidationContext(filters);
+        var validationResults = new List<ValidationResult>();
 
-        // Assert - PageSize should be clamped to 100
-        Assert.Equal(100, filters.PageSize);
+        // Act
+        var isValid = Validator.TryValidateObject(filters, validationContext, validationResults, true);
+
+        // Assert - PageSize exceeding 100 should fail validation
+        Assert.False(isValid);
+        Assert.Contains(validationResults, r => r.MemberNames.Contains("PageSize"));
     }
 
     [Fact]
-    public void TaskFilterParams_PageNumber_MinimumIsOne()
+    public void TaskFilterParams_PageNumber_ValidationFailsWhenLessThanOne()
     {
-        // Arrange & Act
+        // Arrange
         var filters = new TaskFilterParams { PageNumber = -5 };
+        var validationContext = new ValidationContext(filters);
+        var validationResults = new List<ValidationResult>();
 
-        // Assert - PageNumber should be at least 1
-        Assert.Equal(1, filters.PageNumber);
+        // Act
+        var isValid = Validator.TryValidateObject(filters, validationContext, validationResults, true);
+
+        // Assert - PageNumber less than 1 should fail validation
+        Assert.False(isValid);
+        Assert.Contains(validationResults, r => r.MemberNames.Contains("PageNumber"));
     }
 
     [Fact]
-    public void TaskFilterParams_PageSize_MinimumIsDefault()
+    public void TaskFilterParams_PageSize_ValidationFailsWhenZeroOrNegative()
     {
-        // Arrange & Act
+        // Arrange
         var filters = new TaskFilterParams { PageSize = 0 };
+        var validationContext = new ValidationContext(filters);
+        var validationResults = new List<ValidationResult>();
 
-        // Assert - PageSize should default to 50 when 0 or negative
+        // Act
+        var isValid = Validator.TryValidateObject(filters, validationContext, validationResults, true);
+
+        // Assert - PageSize of 0 should fail validation
+        Assert.False(isValid);
+        Assert.Contains(validationResults, r => r.MemberNames.Contains("PageSize"));
+    }
+
+    [Fact]
+    public void TaskFilterParams_DefaultValues_AreValid()
+    {
+        // Arrange
+        var filters = new TaskFilterParams();
+        var validationContext = new ValidationContext(filters);
+        var validationResults = new List<ValidationResult>();
+
+        // Act
+        var isValid = Validator.TryValidateObject(filters, validationContext, validationResults, true);
+
+        // Assert - Default values should be valid
+        Assert.True(isValid);
+        Assert.Equal(1, filters.PageNumber);
         Assert.Equal(50, filters.PageSize);
     }
 }

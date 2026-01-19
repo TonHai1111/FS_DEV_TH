@@ -113,25 +113,17 @@ public class TaskFilterParams
     public string? SortBy { get; set; } = "createdAt";
     public bool SortDescending { get; set; } = true;
 
-    private int _pageNumber = 1;
     /// <summary>
     /// Page number (1-based), defaults to 1
     /// </summary>
-    public int PageNumber
-    {
-        get => _pageNumber;
-        set => _pageNumber = Math.Max(1, value);
-    }
+    [Range(1, int.MaxValue, ErrorMessage = "PageNumber must be at least 1")]
+    public int PageNumber { get; set; } = 1;
 
-    private int _pageSize = DefaultPageSize;
     /// <summary>
     /// Number of items per page, defaults to 50, max 100
     /// </summary>
-    public int PageSize
-    {
-        get => _pageSize;
-        set => _pageSize = value < 1 ? DefaultPageSize : Math.Min(value, MaxPageSize);
-    }
+    [Range(1, MaxPageSize, ErrorMessage = "PageSize must be between 1 and 100")]
+    public int PageSize { get; set; } = DefaultPageSize;
 }
 
 /// <summary>
