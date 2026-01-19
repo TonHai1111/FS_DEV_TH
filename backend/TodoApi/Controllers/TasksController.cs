@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TodoApi.Extensions;
 using TodoApi.Models.DTOs;
 using TodoApi.Services;
 
@@ -22,9 +22,18 @@ public class TasksController : ControllerBase
     }
 
     /// <summary>
-    /// Gets the current authenticated user's ID
+    /// Gets the current authenticated user's ID safely with proper validation
     /// </summary>
-    private int UserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    private int UserId => User.GetUserIdOrThrow();
+
+    /// <summary>
+    /// Validates that a category belongs to the current user
+    /// </summary>
+    private async Task<bool> IsCategoryOwnedByUser(int? categoryId)
+    {
+        if (!categoryId.HasValue) return true;
+        return await _taskService.ValidateCategoryOwnershipAsync(UserId, categoryId.Value);
+    }
 
     /// <summary>
     /// Get all tasks for the current user with optional filtering
@@ -63,14 +72,9 @@ public class TasksController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<ApiResponse<TaskResponse>>> CreateTask([FromBody] CreateTaskRequest request)
     {
-        // Validate category belongs to user if provided
-        if (request.CategoryId.HasValue)
+        if (!await IsCategoryOwnedByUser(request.CategoryId))
         {
-            var isValidCategory = await _taskService.ValidateCategoryOwnershipAsync(UserId, request.CategoryId.Value);
-            if (!isValidCategory)
-            {
-                return BadRequest(ApiResponse.Fail("Invalid category"));
-            }
+            return BadRequest(ApiResponse.Fail("Invalid category"));
         }
 
         var task = await _taskService.CreateTaskAsync(UserId, request);
@@ -87,14 +91,9 @@ public class TasksController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<TaskResponse>>> UpdateTask(int id, [FromBody] UpdateTaskRequest request)
     {
-        // Validate category belongs to user if provided
-        if (request.CategoryId.HasValue)
+        if (!await IsCategoryOwnedByUser(request.CategoryId))
         {
-            var isValidCategory = await _taskService.ValidateCategoryOwnershipAsync(UserId, request.CategoryId.Value);
-            if (!isValidCategory)
-            {
-                return BadRequest(ApiResponse.Fail("Invalid category"));
-            }
+            return BadRequest(ApiResponse.Fail("Invalid category"));
         }
 
         var task = await _taskService.UpdateTaskAsync(UserId, id, request);

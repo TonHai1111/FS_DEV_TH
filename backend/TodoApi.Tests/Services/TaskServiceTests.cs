@@ -384,4 +384,189 @@ public class TaskServiceTests
         // Assert
         Assert.False(result);
     }
+
+    [Fact]
+    public async Task GetTasksAsync_AppliesPagination()
+    {
+        // Arrange
+        using var context = CreateContext();
+        var user = await CreateTestUser(context);
+
+        // Create 10 tasks
+        for (int i = 1; i <= 10; i++)
+        {
+            context.Tasks.Add(new TodoTask
+            {
+                Title = $"Task {i}",
+                UserId = user.Id,
+                CreatedAt = DateTime.UtcNow.AddMinutes(-i)
+            });
+        }
+        await context.SaveChangesAsync();
+
+        var taskService = new TaskService(context);
+
+        // Act - Get first page of 3 items
+        var filters = new TaskFilterParams { PageNumber = 1, PageSize = 3, SortDescending = false };
+        var result = await taskService.GetTasksAsync(user.Id, filters);
+
+        // Assert
+        Assert.Equal(3, result.Count);
+    }
+
+    [Fact]
+    public async Task GetTasksAsync_ReturnsCorrectPage()
+    {
+        // Arrange
+        using var context = CreateContext();
+        var user = await CreateTestUser(context);
+
+        // Create 10 tasks
+        for (int i = 1; i <= 10; i++)
+        {
+            context.Tasks.Add(new TodoTask
+            {
+                Title = $"Task {i:D2}",
+                UserId = user.Id,
+                CreatedAt = DateTime.UtcNow.AddMinutes(i)
+            });
+        }
+        await context.SaveChangesAsync();
+
+        var taskService = new TaskService(context);
+
+        // Act - Get second page (page 2) of 3 items, sorted ascending by CreatedAt
+        var filters = new TaskFilterParams { PageNumber = 2, PageSize = 3, SortDescending = false };
+        var result = await taskService.GetTasksAsync(user.Id, filters);
+
+        // Assert - Should return tasks 4, 5, 6
+        Assert.Equal(3, result.Count);
+        Assert.Equal("Task 04", result[0].Title);
+        Assert.Equal("Task 05", result[1].Title);
+        Assert.Equal("Task 06", result[2].Title);
+    }
+
+    [Fact]
+    public async Task GetTasksPagedAsync_ReturnsCorrectPaginationMetadata()
+    {
+        // Arrange
+        using var context = CreateContext();
+        var user = await CreateTestUser(context);
+
+        // Create 10 tasks
+        for (int i = 1; i <= 10; i++)
+        {
+            context.Tasks.Add(new TodoTask { Title = $"Task {i}", UserId = user.Id });
+        }
+        await context.SaveChangesAsync();
+
+        var taskService = new TaskService(context);
+
+        // Act
+        var filters = new TaskFilterParams { PageNumber = 2, PageSize = 3 };
+        var result = await taskService.GetTasksPagedAsync(user.Id, filters);
+
+        // Assert
+        Assert.Equal(10, result.TotalCount);
+        Assert.Equal(2, result.PageNumber);
+        Assert.Equal(3, result.PageSize);
+        Assert.Equal(4, result.TotalPages); // 10 items / 3 per page = 4 pages (rounded up)
+        Assert.True(result.HasPreviousPage);
+        Assert.True(result.HasNextPage);
+        Assert.Equal(3, result.Items.Count);
+    }
+
+    [Fact]
+    public async Task GetTasksPagedAsync_LastPage_HasNoNextPage()
+    {
+        // Arrange
+        using var context = CreateContext();
+        var user = await CreateTestUser(context);
+
+        // Create 5 tasks
+        for (int i = 1; i <= 5; i++)
+        {
+            context.Tasks.Add(new TodoTask { Title = $"Task {i}", UserId = user.Id });
+        }
+        await context.SaveChangesAsync();
+
+        var taskService = new TaskService(context);
+
+        // Act - Get last page
+        var filters = new TaskFilterParams { PageNumber = 2, PageSize = 3 };
+        var result = await taskService.GetTasksPagedAsync(user.Id, filters);
+
+        // Assert
+        Assert.True(result.HasPreviousPage);
+        Assert.False(result.HasNextPage);
+        Assert.Equal(2, result.Items.Count); // Last page has only 2 items
+    }
+
+    [Fact]
+    public async Task GetTasksPagedAsync_FirstPage_HasNoPreviousPage()
+    {
+        // Arrange
+        using var context = CreateContext();
+        var user = await CreateTestUser(context);
+
+        // Create 5 tasks
+        for (int i = 1; i <= 5; i++)
+        {
+            context.Tasks.Add(new TodoTask { Title = $"Task {i}", UserId = user.Id });
+        }
+        await context.SaveChangesAsync();
+
+        var taskService = new TaskService(context);
+
+        // Act - Get first page
+        var filters = new TaskFilterParams { PageNumber = 1, PageSize = 3 };
+        var result = await taskService.GetTasksPagedAsync(user.Id, filters);
+
+        // Assert
+        Assert.False(result.HasPreviousPage);
+        Assert.True(result.HasNextPage);
+    }
+
+    [Fact]
+    public void TaskFilterParams_SearchTruncatesToMaxLength()
+    {
+        // Arrange
+        var longSearch = new string('a', 300); // 300 characters
+
+        // Act
+        var filters = new TaskFilterParams { Search = longSearch };
+
+        // Assert - Search should be truncated to 200 characters
+        Assert.Equal(200, filters.Search?.Length);
+    }
+
+    [Fact]
+    public void TaskFilterParams_PageSize_ClampedToMaximum()
+    {
+        // Arrange & Act
+        var filters = new TaskFilterParams { PageSize = 500 };
+
+        // Assert - PageSize should be clamped to 100
+        Assert.Equal(100, filters.PageSize);
+    }
+
+    [Fact]
+    public void TaskFilterParams_PageNumber_MinimumIsOne()
+    {
+        // Arrange & Act
+        var filters = new TaskFilterParams { PageNumber = -5 };
+
+        // Assert - PageNumber should be at least 1
+        Assert.Equal(1, filters.PageNumber);
+    }
+
+    [Fact]
+    public void TaskFilterParams_PageSize_MinimumIsDefault()
+    {
+        // Arrange & Act
+        var filters = new TaskFilterParams { PageSize = 0 };
+
+        // Assert - PageSize should default to 50 when 0 or negative
+        Assert.Equal(50, filters.PageSize);
+    }
 }

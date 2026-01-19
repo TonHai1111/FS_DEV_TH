@@ -317,4 +317,61 @@ public class AuthServiceTests
         Assert.Null(updatedUser?.RefreshToken);
         Assert.Null(updatedUser?.RefreshTokenExpiryTime);
     }
+
+    [Fact]
+    public async Task RefreshTokenAsync_WithNullRefreshTokenExpiryTime_ThrowsUnauthorizedAccessException()
+    {
+        // Arrange
+        using var context = CreateContext();
+        var tokenService = CreateMockTokenService();
+
+        // User with null RefreshTokenExpiryTime
+        context.Users.Add(new User
+        {
+            Username = "testuser",
+            Email = "test@example.com",
+            PasswordHash = "hash",
+            RefreshToken = "valid-token",
+            RefreshTokenExpiryTime = null // Edge case: null expiry
+        });
+        await context.SaveChangesAsync();
+
+        var authService = new AuthService(context, tokenService.Object);
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => authService.RefreshTokenAsync("valid-token"));
+
+        Assert.Equal("Invalid or expired refresh token", exception.Message);
+    }
+
+    [Fact]
+    public async Task RefreshTokenAsync_WithEmptyRefreshToken_ThrowsUnauthorizedAccessException()
+    {
+        // Arrange
+        using var context = CreateContext();
+        var tokenService = CreateMockTokenService();
+        var authService = new AuthService(context, tokenService.Object);
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => authService.RefreshTokenAsync(""));
+
+        Assert.Equal("Refresh token is required", exception.Message);
+    }
+
+    [Fact]
+    public async Task RefreshTokenAsync_WithWhitespaceRefreshToken_ThrowsUnauthorizedAccessException()
+    {
+        // Arrange
+        using var context = CreateContext();
+        var tokenService = CreateMockTokenService();
+        var authService = new AuthService(context, tokenService.Object);
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => authService.RefreshTokenAsync("   "));
+
+        Assert.Equal("Refresh token is required", exception.Message);
+    }
 }

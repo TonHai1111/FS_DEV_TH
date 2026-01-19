@@ -20,6 +20,43 @@ public class TaskService : ITaskService
     /// <inheritdoc />
     public async Task<List<TaskResponse>> GetTasksAsync(int userId, TaskFilterParams filters)
     {
+        var query = BuildFilteredQuery(userId, filters);
+
+        // Apply pagination
+        var tasks = await query
+            .Skip((filters.PageNumber - 1) * filters.PageSize)
+            .Take(filters.PageSize)
+            .ToListAsync();
+
+        return tasks.Select(MapToTaskResponse).ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<PagedTaskResponse> GetTasksPagedAsync(int userId, TaskFilterParams filters)
+    {
+        var query = BuildFilteredQuery(userId, filters);
+
+        var totalCount = await query.CountAsync();
+
+        var tasks = await query
+            .Skip((filters.PageNumber - 1) * filters.PageSize)
+            .Take(filters.PageSize)
+            .ToListAsync();
+
+        return new PagedTaskResponse
+        {
+            Items = tasks.Select(MapToTaskResponse).ToList(),
+            TotalCount = totalCount,
+            PageNumber = filters.PageNumber,
+            PageSize = filters.PageSize
+        };
+    }
+
+    /// <summary>
+    /// Builds a filtered query for tasks based on the provided filters
+    /// </summary>
+    private IQueryable<TodoTask> BuildFilteredQuery(int userId, TaskFilterParams filters)
+    {
         var query = _context.Tasks
             .Where(t => t.UserId == userId)
             .Include(t => t.Category)
@@ -77,8 +114,7 @@ public class TaskService : ITaskService
                 : query.OrderBy(t => t.CreatedAt)
         };
 
-        var tasks = await query.ToListAsync();
-        return tasks.Select(MapToTaskResponse).ToList();
+        return query;
     }
 
     /// <inheritdoc />

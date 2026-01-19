@@ -9,9 +9,14 @@ namespace TodoApi.Services;
 public interface ITaskService
 {
     /// <summary>
-    /// Gets all tasks for a user with optional filtering
+    /// Gets all tasks for a user with optional filtering and pagination
     /// </summary>
     Task<List<TaskResponse>> GetTasksAsync(int userId, TaskFilterParams filters);
+
+    /// <summary>
+    /// Gets tasks with pagination metadata for a user with optional filtering
+    /// </summary>
+    Task<PagedTaskResponse> GetTasksPagedAsync(int userId, TaskFilterParams filters);
 
     /// <summary>
     /// Gets a specific task by ID for a user

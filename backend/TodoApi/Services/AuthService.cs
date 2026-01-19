@@ -79,20 +79,28 @@ public class AuthService : IAuthService
     /// <inheritdoc />
     public async Task<AuthResponse> RefreshTokenAsync(string refreshToken)
     {
+        if (string.IsNullOrWhiteSpace(refreshToken))
+        {
+            throw new UnauthorizedAccessException("Refresh token is required");
+        }
+
         var user = await _context.Users
             .FirstOrDefaultAsync(u => u.RefreshToken == refreshToken);
-        
-        if (user == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+
+        // Check for invalid/expired token - handle null RefreshTokenExpiryTime
+        if (user == null ||
+            !user.RefreshTokenExpiryTime.HasValue ||
+            user.RefreshTokenExpiryTime.Value <= DateTime.UtcNow)
         {
             throw new UnauthorizedAccessException("Invalid or expired refresh token");
         }
-        
+
         // Generate new tokens
         user.RefreshToken = _tokenService.GenerateRefreshToken();
         user.RefreshTokenExpiryTime = _tokenService.GetRefreshTokenExpiration();
-        
+
         await _context.SaveChangesAsync();
-        
+
         return CreateAuthResponse(user);
     }
     
