@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TodoApi.Extensions;
 using TodoApi.Models.DTOs;
 using TodoApi.Services;
 
@@ -22,9 +22,15 @@ public class CategoriesController : ControllerBase
     }
 
     /// <summary>
-    /// Gets the current authenticated user's ID
+    /// Gets the current authenticated user's ID safely with proper validation
     /// </summary>
-    private int UserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    private int UserId => User.GetUserIdOrThrow();
+
+    /// <summary>
+    /// Checks if a category name already exists for the user
+    /// </summary>
+    private async Task<bool> IsCategoryNameTaken(string name, int? excludeId = null)
+        => await _categoryService.CategoryNameExistsAsync(UserId, name, excludeId);
 
     /// <summary>
     /// Get all categories for the current user
@@ -63,10 +69,7 @@ public class CategoriesController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<ApiResponse<CategoryResponse>>> CreateCategory([FromBody] CreateCategoryRequest request)
     {
-        // Check for duplicate name
-        var exists = await _categoryService.CategoryNameExistsAsync(UserId, request.Name);
-
-        if (exists)
+        if (await IsCategoryNameTaken(request.Name))
         {
             return BadRequest(ApiResponse.Fail("A category with this name already exists"));
         }
@@ -86,10 +89,7 @@ public class CategoriesController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<ApiResponse<CategoryResponse>>> UpdateCategory(int id, [FromBody] UpdateCategoryRequest request)
     {
-        // Check for duplicate name (excluding current category)
-        var duplicateExists = await _categoryService.CategoryNameExistsAsync(UserId, request.Name, id);
-
-        if (duplicateExists)
+        if (await IsCategoryNameTaken(request.Name, id))
         {
             return BadRequest(ApiResponse.Fail("A category with this name already exists"));
         }

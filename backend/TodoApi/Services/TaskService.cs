@@ -20,6 +20,43 @@ public class TaskService : ITaskService
     /// <inheritdoc />
     public async Task<List<TaskResponse>> GetTasksAsync(int userId, TaskFilterParams filters)
     {
+        var query = BuildFilteredQuery(userId, filters);
+
+        // Apply pagination
+        var tasks = await query
+            .Skip((filters.PageNumber - 1) * filters.PageSize)
+            .Take(filters.PageSize)
+            .ToListAsync();
+
+        return tasks.Select(MapToTaskResponse).ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<PagedTaskResponse> GetTasksPagedAsync(int userId, TaskFilterParams filters)
+    {
+        var query = BuildFilteredQuery(userId, filters);
+
+        var totalCount = await query.CountAsync();
+
+        var tasks = await query
+            .Skip((filters.PageNumber - 1) * filters.PageSize)
+            .Take(filters.PageSize)
+            .ToListAsync();
+
+        return new PagedTaskResponse
+        {
+            Items = tasks.Select(MapToTaskResponse).ToList(),
+            TotalCount = totalCount,
+            PageNumber = filters.PageNumber,
+            PageSize = filters.PageSize
+        };
+    }
+
+    /// <summary>
+    /// Builds a filtered query for tasks based on the provided filters
+    /// </summary>
+    private IQueryable<TodoTask> BuildFilteredQuery(int userId, TaskFilterParams filters)
+    {
         var query = _context.Tasks
             .Where(t => t.UserId == userId)
             .Include(t => t.Category)
@@ -77,8 +114,7 @@ public class TaskService : ITaskService
                 : query.OrderBy(t => t.CreatedAt)
         };
 
-        var tasks = await query.ToListAsync();
-        return tasks.Select(MapToTaskResponse).ToList();
+        return query;
     }
 
     /// <inheritdoc />
@@ -88,7 +124,9 @@ public class TaskService : ITaskService
             .Include(t => t.Category)
             .FirstOrDefaultAsync(t => t.Id == taskId && t.UserId == userId);
 
-        return task == null ? null : MapToTaskResponse(task);
+        if (task is null) return null;
+
+        return MapToTaskResponse(task);
     }
 
     /// <inheritdoc />
@@ -110,10 +148,7 @@ public class TaskService : ITaskService
         _context.Tasks.Add(task);
         await _context.SaveChangesAsync();
 
-        // Reload with category
-        await _context.Entry(task).Reference(t => t.Category).LoadAsync();
-
-        return MapToTaskResponse(task);
+        return await ReloadAndMapTask(task);
     }
 
     /// <inheritdoc />
@@ -122,10 +157,7 @@ public class TaskService : ITaskService
         var task = await _context.Tasks
             .FirstOrDefaultAsync(t => t.Id == taskId && t.UserId == userId);
 
-        if (task == null)
-        {
-            return null;
-        }
+        if (task is null) return null;
 
         task.Title = request.Title;
         task.Description = request.Description;
@@ -136,9 +168,15 @@ public class TaskService : ITaskService
 
         await _context.SaveChangesAsync();
 
-        // Reload with category
-        await _context.Entry(task).Reference(t => t.Category).LoadAsync();
+        return await ReloadAndMapTask(task);
+    }
 
+    /// <summary>
+    /// Reloads category reference and maps task to response DTO
+    /// </summary>
+    private async Task<TaskResponse> ReloadAndMapTask(TodoTask task)
+    {
+        await _context.Entry(task).Reference(t => t.Category).LoadAsync();
         return MapToTaskResponse(task);
     }
 

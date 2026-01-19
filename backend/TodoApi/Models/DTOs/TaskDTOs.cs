@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TodoApi.Validation;
 
 namespace TodoApi.Models.DTOs;
 
@@ -10,15 +11,18 @@ public class CreateTaskRequest
     [Required]
     [MinLength(1)]
     [MaxLength(200)]
+    [NotWhitespace]
     public string Title { get; set; } = string.Empty;
-    
+
     [MaxLength(2000)]
     public string? Description { get; set; }
-    
+
+    [ValidEnum(typeof(TaskPriority))]
     public TaskPriority Priority { get; set; } = TaskPriority.Medium;
-    
+
     public DateTime? DueDate { get; set; }
-    
+
+    [Range(1, int.MaxValue, ErrorMessage = "CategoryId must be a positive integer")]
     public int? CategoryId { get; set; }
 }
 
@@ -30,17 +34,21 @@ public class UpdateTaskRequest
     [Required]
     [MinLength(1)]
     [MaxLength(200)]
+    [NotWhitespace]
     public string Title { get; set; } = string.Empty;
-    
+
     [MaxLength(2000)]
     public string? Description { get; set; }
-    
+
+    [ValidEnum(typeof(Models.TaskStatus))]
     public Models.TaskStatus Status { get; set; }
-    
+
+    [ValidEnum(typeof(TaskPriority))]
     public TaskPriority Priority { get; set; }
-    
+
     public DateTime? DueDate { get; set; }
-    
+
+    [Range(1, int.MaxValue, ErrorMessage = "CategoryId must be a positive integer")]
     public int? CategoryId { get; set; }
 }
 
@@ -50,6 +58,7 @@ public class UpdateTaskRequest
 public class UpdateTaskStatusRequest
 {
     [Required]
+    [ValidEnum(typeof(Models.TaskStatus))]
     public Models.TaskStatus Status { get; set; }
 }
 
@@ -82,13 +91,39 @@ public class TaskResponse
 /// </summary>
 public class TaskFilterParams
 {
+    private const int MaxSearchLength = 200;
+    private const int MaxPageSize = 100;
+    private const int DefaultPageSize = 50;
+
     public Models.TaskStatus? Status { get; set; }
     public TaskPriority? Priority { get; set; }
     public int? CategoryId { get; set; }
-    public string? Search { get; set; }
+
+    private string? _search;
+    /// <summary>
+    /// Search term limited to MaxSearchLength characters
+    /// </summary>
+    public string? Search
+    {
+        get => _search;
+        set => _search = value?.Length > MaxSearchLength ? value[..MaxSearchLength] : value;
+    }
+
     public bool? Overdue { get; set; }
     public string? SortBy { get; set; } = "createdAt";
     public bool SortDescending { get; set; } = true;
+
+    /// <summary>
+    /// Page number (1-based), defaults to 1
+    /// </summary>
+    [Range(1, int.MaxValue, ErrorMessage = "PageNumber must be at least 1")]
+    public int PageNumber { get; set; } = 1;
+
+    /// <summary>
+    /// Number of items per page, defaults to 50, max 100
+    /// </summary>
+    [Range(1, MaxPageSize, ErrorMessage = "PageSize must be between 1 and 100")]
+    public int PageSize { get; set; } = DefaultPageSize;
 }
 
 /// <summary>
@@ -101,4 +136,18 @@ public class TaskStatsResponse
     public int InProgress { get; set; }
     public int Done { get; set; }
     public int Overdue { get; set; }
+}
+
+/// <summary>
+/// Response DTO for paginated task results
+/// </summary>
+public class PagedTaskResponse
+{
+    public List<TaskResponse> Items { get; set; } = new();
+    public int TotalCount { get; set; }
+    public int PageNumber { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
+    public bool HasPreviousPage => PageNumber > 1;
+    public bool HasNextPage => PageNumber < TotalPages;
 }

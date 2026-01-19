@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TodoApi.Extensions;
 using TodoApi.Models.DTOs;
 using TodoApi.Services;
 
@@ -91,11 +91,11 @@ public class AuthController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<ApiResponse>> Logout()
     {
-        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var userId = User.GetUserIdOrThrow();
         await _authService.RevokeRefreshTokenAsync(userId);
         return Ok(ApiResponse.Ok("Logged out successfully"));
     }
-    
+
     /// <summary>
     /// Get the current authenticated user's information
     /// </summary>
@@ -106,11 +106,11 @@ public class AuthController : ControllerBase
     {
         var userResponse = new UserResponse
         {
-            Id = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!),
-            Username = User.FindFirstValue(ClaimTypes.Name)!,
-            Email = User.FindFirstValue(ClaimTypes.Email)!
+            Id = User.GetUserIdOrThrow(),
+            Username = User.GetUsernameOrThrow(),
+            Email = User.GetEmailOrThrow()
         };
-        
+
         return Ok(ApiResponse<UserResponse>.Ok(userResponse));
     }
 }

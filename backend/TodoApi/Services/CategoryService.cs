@@ -17,6 +17,18 @@ public class CategoryService : ICategoryService
         _context = context;
     }
 
+    /// <summary>
+    /// Maps a Category entity to a CategoryResponse DTO
+    /// </summary>
+    private static CategoryResponse ToCategoryResponse(Category category)
+        => new()
+        {
+            Id = category.Id,
+            Name = category.Name,
+            Color = category.Color,
+            TaskCount = category.Tasks?.Count ?? 0
+        };
+
     /// <inheritdoc />
     public async Task<List<CategoryResponse>> GetCategoriesAsync(int userId)
     {
@@ -26,13 +38,7 @@ public class CategoryService : ICategoryService
             .OrderBy(c => c.Name)
             .ToListAsync();
 
-        return categories.Select(c => new CategoryResponse
-        {
-            Id = c.Id,
-            Name = c.Name,
-            Color = c.Color,
-            TaskCount = c.Tasks.Count
-        }).ToList();
+        return categories.Select(ToCategoryResponse).ToList();
     }
 
     /// <inheritdoc />
@@ -42,18 +48,9 @@ public class CategoryService : ICategoryService
             .Include(c => c.Tasks)
             .FirstOrDefaultAsync(c => c.Id == categoryId && c.UserId == userId);
 
-        if (category == null)
-        {
-            return null;
-        }
+        if (category is null) return null;
 
-        return new CategoryResponse
-        {
-            Id = category.Id,
-            Name = category.Name,
-            Color = category.Color,
-            TaskCount = category.Tasks.Count
-        };
+        return ToCategoryResponse(category);
     }
 
     /// <inheritdoc />
@@ -69,13 +66,7 @@ public class CategoryService : ICategoryService
         _context.Categories.Add(category);
         await _context.SaveChangesAsync();
 
-        return new CategoryResponse
-        {
-            Id = category.Id,
-            Name = category.Name,
-            Color = category.Color,
-            TaskCount = 0
-        };
+        return ToCategoryResponse(category);
     }
 
     /// <inheritdoc />
@@ -95,13 +86,7 @@ public class CategoryService : ICategoryService
 
         await _context.SaveChangesAsync();
 
-        return new CategoryResponse
-        {
-            Id = category.Id,
-            Name = category.Name,
-            Color = category.Color,
-            TaskCount = category.Tasks.Count
-        };
+        return ToCategoryResponse(category);
     }
 
     /// <inheritdoc />
@@ -113,6 +98,17 @@ public class CategoryService : ICategoryService
         if (category == null)
         {
             return false;
+        }
+
+        // Explicitly clear CategoryId for all tasks in this category
+        // This ensures proper cascade handling and data consistency
+        var tasksInCategory = await _context.Tasks
+            .Where(t => t.CategoryId == categoryId && t.UserId == userId)
+            .ToListAsync();
+
+        foreach (var task in tasksInCategory)
+        {
+            task.CategoryId = null;
         }
 
         _context.Categories.Remove(category);

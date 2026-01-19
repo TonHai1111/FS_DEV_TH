@@ -30,24 +30,61 @@ const ACCESS_TOKEN_KEY = 'accessToken';
 const REFRESH_TOKEN_KEY = 'refreshToken';
 const USER_KEY = 'user';
 
-// Token helpers
-export const getAccessToken = (): string | null => localStorage.getItem(ACCESS_TOKEN_KEY);
-export const getRefreshToken = (): string | null => localStorage.getItem(REFRESH_TOKEN_KEY);
+// Token helpers with safe JSON parsing
+export const getAccessToken = (): string | null => {
+  try {
+    return localStorage.getItem(ACCESS_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+};
+
+export const getRefreshToken = (): string | null => {
+  try {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+};
+
 export const getStoredUser = (): AuthResponse['user'] | null => {
-  const user = localStorage.getItem(USER_KEY);
-  return user ? JSON.parse(user) : null;
+  try {
+    const user = localStorage.getItem(USER_KEY);
+    if (!user) return null;
+    const parsed = JSON.parse(user);
+    // Validate the parsed user has expected properties
+    if (parsed && typeof parsed.id === 'number' && typeof parsed.username === 'string') {
+      return parsed;
+    }
+    // Invalid user data, clear it
+    clearTokens();
+    return null;
+  } catch {
+    // Corrupted localStorage, clear tokens
+    clearTokens();
+    return null;
+  }
 };
 
 export const setTokens = (accessToken: string, refreshToken: string, user: AuthResponse['user']) => {
-  localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  try {
+    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  } catch {
+    // localStorage might be full or disabled, fail silently
+    console.error('Failed to save tokens to localStorage');
+  }
 };
 
 export const clearTokens = () => {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+  try {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+  } catch {
+    // Fail silently
+  }
 };
 
 // Request interceptor - add auth token
@@ -62,16 +99,49 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor - handle token refresh
+// Token refresh state to prevent multiple refresh attempts
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value: unknown) => void;
+  reject: (reason?: unknown) => void;
+}> = [];
+
+const processQueue = (error: Error | null, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+// Response interceptor - handle token refresh with queue to prevent race conditions
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<ApiResponse<null>>) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
-    
+
     // If 401 and we haven't retried yet, try to refresh the token
     if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        // If already refreshing, queue this request
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+            }
+            return api(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
       originalRequest._retry = true;
-      
+      isRefreshing = true;
+
       const refreshToken = getRefreshToken();
       if (refreshToken) {
         try {
@@ -79,47 +149,79 @@ api.interceptors.response.use(
             `${API_BASE_URL}/auth/refresh`,
             { refreshToken }
           );
-          
+
           if (response.data.success && response.data.data) {
             const { accessToken, refreshToken: newRefreshToken, user } = response.data.data;
             setTokens(accessToken, newRefreshToken, user);
-            
+
+            processQueue(null, accessToken);
+
             // Retry original request with new token
             if (originalRequest.headers) {
               originalRequest.headers.Authorization = `Bearer ${accessToken}`;
             }
             return api(originalRequest);
+          } else {
+            // Response format unexpected
+            const refreshError = new Error('Token refresh failed');
+            processQueue(refreshError, null);
+            clearTokens();
+            window.location.href = '/login';
+            return Promise.reject(refreshError);
           }
-        } catch {
+        } catch (refreshError) {
           // Refresh failed, clear tokens and redirect to login
+          processQueue(refreshError as Error, null);
           clearTokens();
           window.location.href = '/login';
+          return Promise.reject(refreshError);
+        } finally {
+          isRefreshing = false;
         }
+      } else {
+        // No refresh token, redirect to login
+        clearTokens();
+        window.location.href = '/login';
       }
     }
-    
+
     return Promise.reject(error);
   }
 );
+
+// Helper to unwrap API responses and throw errors if unsuccessful
+const unwrapResponse = <T>(response: { data: ApiResponse<T> }, errorMessage: string): NonNullable<T> => {
+  if (!response.data.success || response.data.data == null) {
+    throw new Error(response.data.message || errorMessage);
+  }
+  return response.data.data as NonNullable<T>;
+};
+
+const unwrapResponseOrEmpty = <T>(response: { data: ApiResponse<T> }, errorMessage: string, defaultValue: T): T => {
+  if (!response.data.success) {
+    throw new Error(response.data.message || errorMessage);
+  }
+  return response.data.data ?? defaultValue;
+};
+
+const unwrapVoidResponse = (response: { data: ApiResponse<null> }, errorMessage: string): void => {
+  if (!response.data.success) {
+    throw new Error(response.data.message || errorMessage);
+  }
+};
 
 // Auth API
 export const authApi = {
   login: async (data: LoginRequest): Promise<AuthResponse> => {
     const response = await api.post<ApiResponse<AuthResponse>>('/auth/login', data);
-    if (!response.data.success || !response.data.data) {
-      throw new Error(response.data.message || 'Login failed');
-    }
-    return response.data.data;
+    return unwrapResponse(response, 'Login failed');
   },
-  
+
   register: async (data: RegisterRequest): Promise<AuthResponse> => {
     const response = await api.post<ApiResponse<AuthResponse>>('/auth/register', data);
-    if (!response.data.success || !response.data.data) {
-      throw new Error(response.data.message || 'Registration failed');
-    }
-    return response.data.data;
+    return unwrapResponse(response, 'Registration failed');
   },
-  
+
   logout: async (): Promise<void> => {
     try {
       await api.post('/auth/logout');
@@ -127,7 +229,7 @@ export const authApi = {
       clearTokens();
     }
   },
-  
+
   getCurrentUser: async () => {
     const response = await api.get<ApiResponse<AuthResponse['user']>>('/auth/me');
     return response.data.data;
@@ -138,57 +240,37 @@ export const authApi = {
 export const tasksApi = {
   getAll: async (params?: TaskFilterParams): Promise<Task[]> => {
     const response = await api.get<ApiResponse<Task[]>>('/tasks', { params });
-    if (!response.data.success) {
-      throw new Error(response.data.message || 'Failed to fetch tasks');
-    }
-    return response.data.data || [];
+    return unwrapResponseOrEmpty(response, 'Failed to fetch tasks', []);
   },
-  
+
   getById: async (id: number): Promise<Task> => {
     const response = await api.get<ApiResponse<Task>>(`/tasks/${id}`);
-    if (!response.data.success || !response.data.data) {
-      throw new Error(response.data.message || 'Task not found');
-    }
-    return response.data.data;
+    return unwrapResponse(response, 'Task not found');
   },
-  
+
   create: async (data: CreateTaskRequest): Promise<Task> => {
     const response = await api.post<ApiResponse<Task>>('/tasks', data);
-    if (!response.data.success || !response.data.data) {
-      throw new Error(response.data.message || 'Failed to create task');
-    }
-    return response.data.data;
+    return unwrapResponse(response, 'Failed to create task');
   },
-  
+
   update: async (id: number, data: UpdateTaskRequest): Promise<Task> => {
     const response = await api.put<ApiResponse<Task>>(`/tasks/${id}`, data);
-    if (!response.data.success || !response.data.data) {
-      throw new Error(response.data.message || 'Failed to update task');
-    }
-    return response.data.data;
+    return unwrapResponse(response, 'Failed to update task');
   },
-  
+
   updateStatus: async (id: number, status: TaskStatus): Promise<Task> => {
     const response = await api.patch<ApiResponse<Task>>(`/tasks/${id}/status`, { status });
-    if (!response.data.success || !response.data.data) {
-      throw new Error(response.data.message || 'Failed to update task status');
-    }
-    return response.data.data;
+    return unwrapResponse(response, 'Failed to update task status');
   },
-  
+
   delete: async (id: number): Promise<void> => {
     const response = await api.delete<ApiResponse<null>>(`/tasks/${id}`);
-    if (!response.data.success) {
-      throw new Error(response.data.message || 'Failed to delete task');
-    }
+    unwrapVoidResponse(response, 'Failed to delete task');
   },
-  
+
   getStats: async (): Promise<TaskStats> => {
     const response = await api.get<ApiResponse<TaskStats>>('/tasks/stats');
-    if (!response.data.success || !response.data.data) {
-      throw new Error(response.data.message || 'Failed to fetch stats');
-    }
-    return response.data.data;
+    return unwrapResponse(response, 'Failed to fetch stats');
   },
 };
 
@@ -196,41 +278,27 @@ export const tasksApi = {
 export const categoriesApi = {
   getAll: async (): Promise<Category[]> => {
     const response = await api.get<ApiResponse<Category[]>>('/categories');
-    if (!response.data.success) {
-      throw new Error(response.data.message || 'Failed to fetch categories');
-    }
-    return response.data.data || [];
+    return unwrapResponseOrEmpty(response, 'Failed to fetch categories', []);
   },
-  
+
   getById: async (id: number): Promise<Category> => {
     const response = await api.get<ApiResponse<Category>>(`/categories/${id}`);
-    if (!response.data.success || !response.data.data) {
-      throw new Error(response.data.message || 'Category not found');
-    }
-    return response.data.data;
+    return unwrapResponse(response, 'Category not found');
   },
-  
+
   create: async (data: CreateCategoryRequest): Promise<Category> => {
     const response = await api.post<ApiResponse<Category>>('/categories', data);
-    if (!response.data.success || !response.data.data) {
-      throw new Error(response.data.message || 'Failed to create category');
-    }
-    return response.data.data;
+    return unwrapResponse(response, 'Failed to create category');
   },
-  
+
   update: async (id: number, data: UpdateCategoryRequest): Promise<Category> => {
     const response = await api.put<ApiResponse<Category>>(`/categories/${id}`, data);
-    if (!response.data.success || !response.data.data) {
-      throw new Error(response.data.message || 'Failed to update category');
-    }
-    return response.data.data;
+    return unwrapResponse(response, 'Failed to update category');
   },
-  
+
   delete: async (id: number): Promise<void> => {
     const response = await api.delete<ApiResponse<null>>(`/categories/${id}`);
-    if (!response.data.success) {
-      throw new Error(response.data.message || 'Failed to delete category');
-    }
+    unwrapVoidResponse(response, 'Failed to delete category');
   },
 };
 

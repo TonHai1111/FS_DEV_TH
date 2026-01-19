@@ -416,4 +416,74 @@ public class CategoryServiceTests
         // Assert
         Assert.False(result);
     }
+
+    [Fact]
+    public async Task DeleteCategoryAsync_ClearsCategoryIdForTasksInCategory()
+    {
+        // Arrange
+        using var context = CreateContext();
+        var user = await CreateTestUser(context);
+
+        var category = new Category { Name = "To Delete", Color = "#FF0000", UserId = user.Id };
+        context.Categories.Add(category);
+        await context.SaveChangesAsync();
+
+        // Create tasks associated with the category
+        var task1 = new TodoTask { Title = "Task 1", UserId = user.Id, CategoryId = category.Id };
+        var task2 = new TodoTask { Title = "Task 2", UserId = user.Id, CategoryId = category.Id };
+        var taskOtherCategory = new TodoTask { Title = "Task 3", UserId = user.Id, CategoryId = null };
+        context.Tasks.AddRange(task1, task2, taskOtherCategory);
+        await context.SaveChangesAsync();
+
+        var categoryService = new CategoryService(context);
+
+        // Act
+        var result = await categoryService.DeleteCategoryAsync(user.Id, category.Id);
+
+        // Assert
+        Assert.True(result);
+
+        // Verify tasks in the deleted category now have null CategoryId
+        var updatedTask1 = await context.Tasks.FindAsync(task1.Id);
+        var updatedTask2 = await context.Tasks.FindAsync(task2.Id);
+        var unchangedTask = await context.Tasks.FindAsync(taskOtherCategory.Id);
+
+        Assert.NotNull(updatedTask1);
+        Assert.Null(updatedTask1.CategoryId);
+        Assert.NotNull(updatedTask2);
+        Assert.Null(updatedTask2.CategoryId);
+        Assert.NotNull(unchangedTask);
+        Assert.Null(unchangedTask.CategoryId); // Was already null
+    }
+
+    [Fact]
+    public async Task DeleteCategoryAsync_OnlyClearsCategoryIdForUserTasks()
+    {
+        // Arrange
+        using var context = CreateContext();
+        var user = await CreateTestUser(context);
+
+        // Create a category for this user
+        var category = new Category { Name = "To Delete", Color = "#FF0000", UserId = user.Id };
+        context.Categories.Add(category);
+        await context.SaveChangesAsync();
+
+        // Create user's task in the category
+        var userTask = new TodoTask { Title = "User Task", UserId = user.Id, CategoryId = category.Id };
+        context.Tasks.Add(userTask);
+        await context.SaveChangesAsync();
+
+        var categoryService = new CategoryService(context);
+
+        // Act
+        var result = await categoryService.DeleteCategoryAsync(user.Id, category.Id);
+
+        // Assert
+        Assert.True(result);
+
+        // User's task should have CategoryId set to null
+        var updatedUserTask = await context.Tasks.FindAsync(userTask.Id);
+        Assert.NotNull(updatedUserTask);
+        Assert.Null(updatedUserTask.CategoryId);
+    }
 }
