@@ -118,6 +118,8 @@ FS_DEV_TH/
 │   │   │   └── CategoriesController.cs
 │   │   ├── Data/
 │   │   │   └── AppDbContext.cs   # EF Core context
+│   │   ├── Extensions/           # Extension methods
+│   │   │   └── ClaimsPrincipalExtensions.cs
 │   │   ├── Middleware/
 │   │   │   └── ExceptionMiddleware.cs
 │   │   ├── Migrations/           # EF Core migrations
@@ -139,26 +141,36 @@ FS_DEV_TH/
 │   │   │   ├── TaskService.cs
 │   │   │   ├── ICategoryService.cs
 │   │   │   └── CategoryService.cs
+│   │   ├── Validation/           # Custom validation attributes
+│   │   │   ├── NotWhitespaceAttribute.cs
+│   │   │   └── ValidEnumAttribute.cs
 │   │   ├── Program.cs            # App configuration
 │   │   ├── appsettings.json
 │   │   └── TodoApi.csproj
 │   │
-│   └── TodoApi.Tests/            # Unit tests (xUnit + Moq)
+│   └── TodoApi.Tests/            # Unit tests (xUnit)
 │       ├── Controllers/
 │       │   ├── AuthControllerTests.cs
 │       │   ├── TasksControllerTests.cs
 │       │   └── CategoriesControllerTests.cs
+│       ├── Extensions/
+│       │   └── ClaimsPrincipalExtensionsTests.cs
+│       ├── Middleware/
+│       │   └── ExceptionMiddlewareTests.cs
 │       ├── Services/
 │       │   ├── AuthServiceTests.cs
 │       │   ├── TaskServiceTests.cs
 │       │   ├── CategoryServiceTests.cs
 │       │   └── TokenServiceTests.cs
+│       ├── Validation/
+│       │   └── ValidationAttributeTests.cs
 │       └── TodoApi.Tests.csproj
 │
 ├── frontend/
 │   └── todo-app/
 │       ├── src/
 │       │   ├── components/       # React components
+│       │   │   ├── ErrorBoundary.tsx
 │       │   │   ├── Header.tsx
 │       │   │   ├── LoadingSpinner.tsx
 │       │   │   ├── Sidebar.tsx
@@ -169,6 +181,7 @@ FS_DEV_TH/
 │       │   ├── context/          # Auth context
 │       │   │   └── AuthContext.tsx
 │       │   ├── hooks/            # Custom hooks
+│       │   │   ├── useDebounce.ts
 │       │   │   └── useTasks.ts   # React Query hooks
 │       │   ├── pages/            # Page components
 │       │   │   ├── Dashboard.tsx
@@ -176,8 +189,10 @@ FS_DEV_TH/
 │       │   │   └── RegisterPage.tsx
 │       │   ├── services/         # API services
 │       │   │   └── api.ts
-│       │   └── types/            # TypeScript types
-│       │       └── index.ts
+│       │   ├── types/            # TypeScript types
+│       │   │   └── index.ts
+│       │   ├── App.tsx           # Root component
+│       │   └── main.tsx          # Entry point
 │       ├── package.json
 │       └── vite.config.ts
 │
