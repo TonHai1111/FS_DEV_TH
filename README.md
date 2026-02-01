@@ -97,9 +97,14 @@ A full-stack task management application built with .NET Core 8 and React TypeSc
    - Kanban-style board layout
    - Loading states and error handling
    - Toast notifications
-   - Client and server-side validation
+   - Debounced search input for performance
 
-5. **API Best Practices**
+5. **Validation**
+   - FluentValidation for server-side request validation
+   - Custom validators for Auth, Task, and Category requests
+   - Client-side form validation with React Hook Form + Zod
+
+6. **API Best Practices**
    - RESTful design
    - Request/Response DTOs
    - Global exception handling
@@ -141,9 +146,10 @@ FS_DEV_TH/
 │   │   │   ├── TaskService.cs
 │   │   │   ├── ICategoryService.cs
 │   │   │   └── CategoryService.cs
-│   │   ├── Validation/           # Custom validation attributes
-│   │   │   ├── NotWhitespaceAttribute.cs
-│   │   │   └── ValidEnumAttribute.cs
+│   │   ├── Validators/           # FluentValidation validators
+│   │   │   ├── AuthValidators.cs
+│   │   │   ├── TaskValidators.cs
+│   │   │   └── CategoryValidators.cs
 │   │   ├── Program.cs            # App configuration
 │   │   ├── appsettings.json
 │   │   └── TodoApi.csproj
@@ -153,17 +159,13 @@ FS_DEV_TH/
 │       │   ├── AuthControllerTests.cs
 │       │   ├── TasksControllerTests.cs
 │       │   └── CategoriesControllerTests.cs
-│       ├── Extensions/
-│       │   └── ClaimsPrincipalExtensionsTests.cs
-│       ├── Middleware/
-│       │   └── ExceptionMiddlewareTests.cs
 │       ├── Services/
 │       │   ├── AuthServiceTests.cs
 │       │   ├── TaskServiceTests.cs
 │       │   ├── CategoryServiceTests.cs
 │       │   └── TokenServiceTests.cs
-│       ├── Validation/
-│       │   └── ValidationAttributeTests.cs
+│       ├── Validators/
+│       │   └── TaskValidatorTests.cs
 │       └── TodoApi.Tests.csproj
 │
 ├── frontend/
@@ -439,9 +441,10 @@ Category
 
 - Passwords hashed with BCrypt (12 rounds)
 - JWT tokens with short expiration (1 hour)
-- Refresh tokens for extended sessions
+- Refresh tokens for extended sessions (7 days)
 - CORS restricted to allowed origins
-- Input validation on client and server
+- Input validation with FluentValidation on server
+- React Query cache cleared on logout (prevents data leakage between users)
 - User-scoped data access (no cross-user data leaks)
 
 ## Future Improvements
@@ -490,7 +493,12 @@ dotnet test
 
 # Run a specific test
 dotnet test --filter "FullyQualifiedName~TaskServiceTests.GetTasksAsync_ReturnsUserTasks"
+
+# Run validator tests only
+dotnet test --filter "TaskValidatorTests"
 ```
+
+The test suite includes 142 tests covering services, controllers, and validators.
 
 ### Database Migrations
 The application uses EF Core's `EnsureCreated()` for simplicity. For production:
