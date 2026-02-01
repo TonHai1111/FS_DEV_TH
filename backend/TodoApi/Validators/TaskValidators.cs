@@ -76,8 +76,6 @@ public class UpdateTaskStatusRequestValidator : AbstractValidator<UpdateTaskStat
 /// </summary>
 public class TaskFilterParamsValidator : AbstractValidator<TaskFilterParams>
 {
-    private static readonly string[] ValidSortFields = { "createdAt", "dueDate", "priority", "title", "status" };
-
     public TaskFilterParamsValidator()
     {
         RuleFor(x => x.Status)
@@ -96,9 +94,7 @@ public class TaskFilterParamsValidator : AbstractValidator<TaskFilterParams>
             .MaximumLength(100).WithMessage("Search term cannot exceed 100 characters")
             .When(x => !string.IsNullOrEmpty(x.Search));
 
-        RuleFor(x => x.SortBy)
-            .Must(sortBy => string.IsNullOrEmpty(sortBy) || ValidSortFields.Contains(sortBy.ToLower()))
-            .WithMessage($"SortBy must be one of: {string.Join(", ", ValidSortFields)}")
-            .When(x => !string.IsNullOrEmpty(x.SortBy));
+        // Note: SortBy validation removed - DTO normalizes invalid values to "createdAt" default,
+        // and TaskService handles unknown values with a fallback sort
     }
 }

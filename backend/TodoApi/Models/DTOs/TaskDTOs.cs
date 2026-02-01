@@ -110,7 +110,19 @@ public class TaskFilterParams
     }
 
     public bool? Overdue { get; set; }
-    public string? SortBy { get; set; } = "createdAt";
+
+    private string _sortBy = "createdAt";
+    /// <summary>
+    /// Sort field. Normalizes empty/invalid strings to default value.
+    /// </summary>
+    public string? SortBy
+    {
+        get => _sortBy;
+        set => _sortBy = string.IsNullOrWhiteSpace(value) || value == "undefined"
+            ? "createdAt"
+            : value;
+    }
+
     public bool SortDescending { get; set; } = true;
 
     /// <summary>
