@@ -49,12 +49,20 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 
-// FluentValidation
-builder.Services.AddFluentValidationAutoValidation();
+// FluentValidation - configure auto validation for MVC
+builder.Services.AddFluentValidationAutoValidation(config =>
+{
+    // Disable Data Annotations validation to let FluentValidation handle everything
+    config.DisableDataAnnotationsValidation = true;
+});
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
-// Controllers
-builder.Services.AddControllers();
+// Controllers - configure to use FluentValidation
+builder.Services.AddControllers(options =>
+{
+    // Ensure validation errors return 400 Bad Request
+    options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
+});
 
 // CORS
 var corsSettings = builder.Configuration.GetSection("CorsSettings");
