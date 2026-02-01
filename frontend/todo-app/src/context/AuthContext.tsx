@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { User, LoginRequest, RegisterRequest } from '../types';
 import { authApi, setTokens, clearTokens, getAccessToken, getStoredUser } from '../services/api';
 import toast from 'react-hot-toast';
@@ -15,6 +16,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -65,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       clearTokens();
       setUser(null);
+      queryClient.clear(); // Clear all cached data to prevent data leakage between users
       toast.success('Logged out successfully');
     }
   };
