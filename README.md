@@ -66,6 +66,8 @@ A full-stack task management application built with .NET Core 8 and React TypeSc
 - **date-fns** - Date manipulation utilities
 - **Lucide React** - Icon library
 - **React Hot Toast** - Notifications
+- **Vitest** - Unit testing framework
+- **React Testing Library** - Component testing utilities
 
 ## Features
 
@@ -191,11 +193,25 @@ FS_DEV_TH/
 │       │   │   └── RegisterPage.tsx
 │       │   ├── services/         # API services
 │       │   │   └── api.ts
+│       │   ├── test/             # Unit tests (Vitest)
+│       │   │   ├── components/   # Component tests
+│       │   │   │   ├── ErrorBoundary.test.tsx
+│       │   │   │   ├── LoadingSpinner.test.tsx
+│       │   │   │   └── TaskCard.test.tsx
+│       │   │   ├── context/      # Context tests
+│       │   │   │   └── AuthContext.test.tsx
+│       │   │   ├── hooks/        # Hook tests
+│       │   │   │   └── useDebounce.test.ts
+│       │   │   ├── types/        # Type utility tests
+│       │   │   │   └── utils.test.ts
+│       │   │   ├── setup.ts      # Test setup
+│       │   │   └── test-utils.tsx # Test utilities
 │       │   ├── types/            # TypeScript types
 │       │   │   └── index.ts
 │       │   ├── App.tsx           # Root component
 │       │   └── main.tsx          # Entry point
 │       ├── package.json
+│       ├── vitest.config.ts      # Vitest configuration
 │       └── vite.config.ts
 │
 └── README.md
@@ -486,7 +502,9 @@ Category
 
 ## Development Notes
 
-### Running Tests (Backend)
+### Running Tests
+
+**Backend (xUnit):**
 ```bash
 cd backend/TodoApi.Tests
 dotnet test
@@ -498,7 +516,19 @@ dotnet test --filter "FullyQualifiedName~TaskServiceTests.GetTasksAsync_ReturnsU
 dotnet test --filter "TaskValidatorTests"
 ```
 
-The test suite includes 142 tests covering services, controllers, and validators.
+The backend test suite includes 142 tests covering services, controllers, and validators.
+
+**Frontend (Vitest):**
+```bash
+cd frontend/todo-app
+npm test           # Run tests in watch mode
+npm test -- --run  # Run tests once
+
+# Run specific test file
+npm test -- src/test/components/TaskCard.test.tsx
+```
+
+The frontend test suite includes 54 tests covering components, hooks, context, and type utilities.
 
 ### Database Migrations
 The application uses EF Core's `EnsureCreated()` for simplicity. For production:
